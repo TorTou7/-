@@ -1,0 +1,2052 @@
+/**
+ * 子比自助广告位 - 前端样式（服务器端渲染架构）
+ *
+ * 设计思想（严格遵循开发方案 3.2）：
+ * ========================================
+ * 1. CSS Grid 布局系统
+ *    - 使用 --per-row 自定义属性控制每行数量
+ *    - 响应式断点（移动端/PC端）
+ *
+ * 2. 空位状态视觉设计
+ *    - .is-empty 类标识空位
+ *    - 虚线边框 + 招租提示
+ *    - 悬停效果提示可购买
+ *
+ * 3. 已售状态视觉设计
+ *    - 实线边框 + 阴影效果
+ *    - 悬停放大/高亮
+ *
+ * 4. 性能优化
+ *    - 使用 CSS 变量减少重复代码
+ *    - 图片懒加载支持（loading="lazy"）
+ *    - GPU 加速动画（transform）
+ *
+ * @package Zibll_Ad
+ * @version 1.0.0
+ * @see 开发方案.txt 步骤 3.2
+ */
+
+/* ========================================
+   CSS 自定义属性（主题兼容）
+   ======================================== */
+
+:root {
+    --zibll-ad-primary: #409eff;
+    --zibll-ad-border: #dcdfe6;
+    --zibll-ad-bg-empty: #f5f7fa;
+    --zibll-ad-text-muted: #909399;
+    --zibll-ad-radius: 8px;
+    --zibll-ad-transition: all 0.3s ease;
+}
+
+/* ========================================
+   广告位容器
+   ======================================== */
+
+.zibll-ad-slot-container {
+    width: 100%;
+    margin: 20px 0;
+}
+
+/* ========================================
+   CSS Grid 布局（核心）
+   开发方案要求：使用 --per-row 变量
+   ======================================== */
+
+.zibll-ad-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--per-row, 3), 1fr);
+    gap: 20px;
+    width: 100%;
+}
+
+/* ========================================
+   广告单元通用样式
+   ======================================== */
+
+.zibll-ad-unit {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--zibll-ad-radius);
+    transition: var(--zibll-ad-transition);
+    background: #fff;
+}
+
+/* ========================================
+   空位状态（is-empty）
+   开发方案要求：虚线边框 + 招租提示
+   ======================================== */
+
+.zibll-ad-unit.is-empty {
+    border: 2px dashed var(--zibll-ad-border);
+    background: var(--zibll-ad-bg-empty);
+    cursor: pointer;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.zibll-ad-unit.is-empty:hover {
+    border-color: var(--zibll-ad-primary);
+    box-shadow: 0 2px 12px 0 rgba(64, 158, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.zibll-ad-unit.is-empty:active {
+    transform: translateY(0);
+}
+
+/* 空位提示层 */
+.ad-empty-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.95);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.zibll-ad-unit.is-empty:hover .ad-empty-overlay {
+    opacity: 1;
+}
+
+/* 购买按钮 */
+.zibll-ad-buy-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    background: none;
+    border: none;
+    color: var(--zibll-ad-primary);
+    cursor: pointer;
+    font-size: 16px;
+    transition: var(--zibll-ad-transition);
+}
+
+.zibll-ad-buy-btn:hover {
+    transform: scale(1.1);
+}
+
+.zibll-ad-buy-btn .btn-icon {
+    font-size: 48px;
+    font-weight: 300;
+    line-height: 1;
+}
+
+.zibll-ad-buy-btn .btn-text {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+/* ========================================
+   已售状态（非 is-empty）
+   ======================================== */
+
+.zibll-ad-unit:not(.is-empty) {
+    border: 1px solid var(--zibll-ad-border);
+}
+
+.zibll-ad-unit:not(.is-empty):hover {
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+/* ========================================
+   图片型广告样式
+   开发方案要求：<a><img> 结构
+   ======================================== */
+
+.ad-link,
+.ad-image-wrapper {
+    display: block;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.ad-image {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+.ad-link:hover .ad-image {
+    transform: scale(1.05);
+}
+
+/* 图片加载占位 */
+.ad-image-wrapper::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 200px;
+    background: var(--zibll-ad-bg-empty);
+}
+
+/* ========================================
+   文字型广告样式（标签/徽章样式）
+   用户需求：固定高度60px，左图标+右文字
+   ======================================== */
+
+/* ========================================
+   兼容：提升主题 ZibPay 支付模态框层级，避免被 Element Plus 对话框遮挡
+   ======================================== */
+#zibpay_modal,
+#zibpay_modal.modal,
+#zibpay_modal .modal-dialog,
+#zibpay_modal .modal-content,
+#zibpay_modal .modal-pay-body,
+#zibpay_modal .pay-payment {
+    z-index: 10050 !important;
+}
+
+/* ========================================
+   深色模式：子比主题支付模态框适配
+   确保从购买广告位模态框跳转到支付模态框时，深色模式保持一致
+   ======================================== */
+body.dark-theme #zibpay_modal .modal-content {
+    background-color: #1e1e1e !important;
+    border: 1px solid #3a3a3a !important;
+}
+
+body.dark-theme #zibpay_modal .modal-header {
+    background-color: #1e1e1e !important;
+    border-bottom: 1px solid #3a3a3a !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme #zibpay_modal .modal-title {
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme #zibpay_modal .modal-body {
+    background-color: #1e1e1e !important;
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme #zibpay_modal .pay-payment {
+    background-color: #1e1e1e !important;
+}
+
+body.dark-theme #zibpay_modal .close {
+    color: #909399 !important;
+}
+
+body.dark-theme #zibpay_modal .close:hover {
+    color: #e0e0e0 !important;
+}
+
+.ad-text-tag {
+    /* 布局 */
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+
+    /* 尺寸 */
+    height: 60px;
+    padding: 0 20px 0 10px;
+    width: 100%;
+
+    /* 样式 */
+    border-radius: 30px; /* 圆角矩形（高度的一半） */
+    text-decoration: none;
+    transition: var(--zibll-ad-transition);
+    box-sizing: border-box;
+
+    /* 文字 */
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.4;
+
+    /* 防止内容溢出 */
+    overflow: hidden;
+}
+
+/* 悬停效果 */
+a.ad-text-tag:hover {
+    opacity: 0.85;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 非链接状态（空位或无链接） */
+div.ad-text-tag {
+    cursor: default;
+}
+
+/* 左侧图标 */
+.tag-icon {
+    /* 布局 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0; /* 防止压缩 */
+
+    /* 尺寸 */
+    width: 40px;
+    height: 40px;
+
+    /* 样式 */
+    background-color: rgba(255, 255, 255, 0.6);
+    border-radius: 50%; /* 圆形 */
+
+    /* 文字 */
+    font-size: 18px;
+    font-weight: 600;
+    text-transform: uppercase; /* 英文字母大写 */
+}
+
+/* 右侧文字 */
+.tag-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 空位状态的文字广告（重写样式） */
+.zibll-ad-unit.is-empty .ad-text-tag {
+    border: 2px dashed var(--zibll-ad-border);
+    background-color: var(--zibll-ad-bg-empty) !important;
+    color: var(--zibll-ad-text-muted) !important;
+}
+
+.zibll-ad-unit.is-empty .tag-icon {
+    background-color: rgba(144, 147, 153, 0.2);
+}
+
+/* ========================================
+   旧版文字广告样式（向后兼容）
+   ======================================== */
+
+.ad-text-link,
+.ad-text-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    min-height: 120px;
+    font-size: 16px;
+    line-height: 1.6;
+    word-break: break-word;
+    text-decoration: none;
+    transition: var(--zibll-ad-transition);
+}
+
+.ad-text-link:hover {
+    opacity: 0.8;
+    transform: scale(1.02);
+}
+
+.ad-text-content {
+    color: var(--zibll-ad-text-muted);
+    cursor: default;
+}
+
+/* ========================================
+   响应式设计（移动端优化）
+   ======================================== */
+
+/* 平板设备 */
+@media (max-width: 768px) {
+    .zibll-ad-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+
+    .ad-image {
+        height: 150px;
+    }
+
+    /* 文字广告标签样式调整 */
+    .ad-text-tag {
+        height: 56px;
+        padding: 0 16px 0 8px;
+        gap: 10px;
+        font-size: 14px;
+    }
+
+    .tag-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    .zibll-ad-buy-btn .btn-icon {
+        font-size: 36px;
+    }
+
+    .zibll-ad-buy-btn .btn-text {
+        font-size: 14px;
+    }
+}
+
+/* 手机设备 */
+@media (max-width: 480px) {
+    .zibll-ad-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .zibll-ad-slot-container {
+        margin: 15px 0;
+    }
+
+    .ad-image {
+        height: 180px;
+    }
+
+    /* 文字广告标签样式调整 */
+    .ad-text-tag {
+        height: 52px;
+        padding: 0 14px 0 6px;
+        gap: 8px;
+        font-size: 13px;
+        border-radius: 26px; /* 高度的一半 */
+    }
+
+    .tag-icon {
+        width: 34px;
+        height: 34px;
+        font-size: 15px;
+    }
+
+    .zibll-ad-buy-btn .btn-icon {
+        font-size: 32px;
+    }
+
+    .zibll-ad-buy-btn .btn-text {
+        font-size: 13px;
+    }
+}
+
+/* ========================================
+   Element Plus Upload 兼容（确保隐藏原生 input）
+   ======================================== */
+.el-upload__input {
+    display: none !important;
+}
+
+/* ========================================
+   购买模态框 - 图片上传 UI（复用后台 SlotForm 风格）
+   ======================================== */
+.image-upload { display: flex; flex-direction: column; gap: 15px; width: 100%; }
+.image-upload .el-upload { display: block; width: 100%; }
+.preview-image {
+  width: 100%; aspect-ratio: 8 / 1; height: auto; border-radius: 4px; border: 1px solid #dcdfe6;
+  cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden;
+}
+.preview-image:hover { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64,158,255,.2); }
+.preview-image::after {
+  content: '点击更换'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: rgba(0,0,0,.6); color: #fff; padding: 8px 16px; border-radius: 4px;
+  opacity: 0; transition: opacity .3s; pointer-events: none; font-size: 14px;
+}
+.preview-image:hover::after { opacity: 1; }
+.upload-placeholder {
+  width: 100%; aspect-ratio: 8 / 1; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; height: auto;
+  border: 2px dashed #dcdfe6; border-radius: 4px; color: #909399; cursor: pointer; transition: all .3s;
+}
+.upload-placeholder:hover { border-color: #409eff; color: #409eff; }
+.upload-placeholder .el-icon { font-size: 32px; margin-bottom: 0; }
+.upload-placeholder .ad-plus-icon { font-size: 32px; margin-bottom: 0; line-height: 1; }
+.image-slot { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: #f5f7fa; }
+.image-slot .el-icon { font-size: 48px; color: #c0c4cc; }
+.image-slot .ad-plus-icon { font-size: 48px; color: #c0c4cc; line-height: 1; }
+.image-actions { display: flex; gap: 10px; }
+/* 在不同屏幕下自适应为容器宽度，固定 8:1 比例 */
+
+/* ========================================
+   打印样式
+   ======================================== */
+
+@media print {
+    .zibll-ad-unit.is-empty,
+    .ad-empty-overlay {
+        display: none !important;
+    }
+
+    .zibll-ad-unit:not(.is-empty) {
+        page-break-inside: avoid;
+    }
+}
+
+/* ========================================
+   暗黑模式支持（主题适配）
+   ======================================== */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --zibll-ad-border: #4c4d4f;
+        --zibll-ad-bg-empty: #2a2a2a;
+        --zibll-ad-text-muted: #909399;
+    }
+
+    .zibll-ad-unit {
+        background: #1a1a1a;
+    }
+
+    .zibll-ad-unit.is-empty {
+        background: var(--zibll-ad-bg-empty);
+    }
+
+    .ad-empty-overlay {
+        background: rgba(26, 26, 26, 0.95);
+    }
+}
+
+/* ========================================
+   辅助功能（无障碍访问）
+   ======================================== */
+
+/* 键盘焦点指示 */
+.zibll-ad-unit:focus-visible,
+.zibll-ad-buy-btn:focus-visible {
+    outline: 2px solid var(--zibll-ad-primary);
+    outline-offset: 2px;
+}
+
+/* 减少动画（用户偏好） */
+@media (prefers-reduced-motion: reduce) {
+    .zibll-ad-unit,
+    .ad-empty-overlay,
+    .ad-text-link,
+    .ad-image,
+    .zibll-ad-buy-btn {
+        transition: none;
+        transform: none !important;
+    }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+    .zibll-ad-unit.is-empty {
+        border-width: 3px;
+    }
+
+    .zibll-ad-unit:not(.is-empty) {
+        border-width: 2px;
+    }
+}
+
+/* ========================================
+   动画效果（性能优化）
+   ======================================== */
+
+/* 淡入动画 */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.zibll-ad-unit {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+/* 为每个单元添加延迟，创建阶梯效果 */
+.zibll-ad-unit:nth-child(1) { animation-delay: 0s; }
+.zibll-ad-unit:nth-child(2) { animation-delay: 0.05s; }
+.zibll-ad-unit:nth-child(3) { animation-delay: 0.1s; }
+.zibll-ad-unit:nth-child(4) { animation-delay: 0.15s; }
+.zibll-ad-unit:nth-child(5) { animation-delay: 0.2s; }
+.zibll-ad-unit:nth-child(6) { animation-delay: 0.25s; }
+
+/* 脉冲动画（空位图标） */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.zibll-ad-buy-btn .btn-icon {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .zibll-ad-buy-btn .btn-icon {
+        animation: none;
+    }
+}
+
+/* ========================================
+   图片广告位新模板样式（完全复刻用户模板）
+   ======================================== */
+
+/* 广告容器 - Grid 布局 */
+.ad-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+/* 使用CSS变量动态设置列数（支持任意列数） */
+.ad-container {
+    grid-template-columns: repeat(var(--per-row, 3), 1fr);
+}
+
+/* 广告项 */
+.ad-item {
+    width: 100%;
+    aspect-ratio: var(--ad-aspect-ratio, 8 / 1);
+    overflow: hidden;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    text-decoration: none;
+    display: block;
+}
+
+/* 悬停效果 */
+.ad-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* 空位状态特殊样式 */
+.ad-item.ad-item-empty {
+    opacity: 0.8;
+}
+
+.ad-item.ad-item-empty:hover {
+    opacity: 1;
+}
+
+/* 广告图片 - 强制调整比例不裁剪 */
+.ad-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    display: block;
+}
+
+/* 响应式设计 - 平板 */
+@media (max-width: 768px) {
+    .ad-container {
+        gap: 12px;
+    }
+}
+
+/* 响应式设计 - 手机 */
+@media (max-width: 600px) {
+    .ad-container {
+        gap: 10px;
+        /* 手机端使用CSS变量动态设置列数（支持任意列数） */
+        grid-template-columns: repeat(var(--mobile-per-row, 1), 1fr) !important;
+    }
+}
+
+/* ========================================
+   主题集成 - Card 容器适配
+   ======================================== */
+
+/* 确保在 theme-box 和 zib-widget 内部正常显示 */
+.theme-box .ad-container,
+.zib-widget .ad-container {
+    margin: 0;
+}
+
+/* 打印样式 */
+@media print {
+    .ad-item.ad-item-empty {
+        display: none !important;
+    }
+
+    .ad-item {
+        page-break-inside: avoid;
+    }
+}
+
+/* 无障碍支持 - 键盘焦点 */
+.ad-item:focus-visible {
+    outline: 2px solid var(--zibll-ad-primary, #409eff);
+    outline-offset: 2px;
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+    .ad-item {
+        transition: none;
+        transform: none !important;
+    }
+}
+
+/* ========================================
+   错误提示样式
+   ======================================== */
+
+.zibll-ad-error {
+    padding: 20px;
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+    text-align: center;
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+/* ========================================
+   加载状态
+   ======================================== */
+
+.zibll-ad-loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--zibll-ad-text-muted);
+}
+
+/* ========================================
+   主题兼容性增强
+   ======================================== */
+
+/* 子比主题 .theme-box 集成 */
+.theme-box .zibll-ad-slot-container,
+.zib-widget .zibll-ad-slot-container {
+    margin: 0;
+}
+
+/* 侧边栏适配 */
+.sidebar .zibll-ad-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.sidebar .ad-image {
+    height: auto;
+    aspect-ratio: 4 / 3;
+}
+
+/* 侧边栏文字广告位样式调整 */
+.sidebar .ad-text-tag {
+    width: 100%;
+    justify-content: flex-start;
+}
+
+/* 侧边栏空位提示调整 */
+.sidebar .zibll-ad-unit.is-empty {
+    min-height: 60px; /* 文字广告位在侧边栏高度一致 */
+}
+
+/* ========================================
+   空位样式复刻（auto-list-null）
+   复刻主题自动挂载链接样式，实现一致的视觉效果
+   ======================================== */
+
+/* 空位容器 - 主题风格 */
+.zibll-ad-unit.is-empty .auto-list-null {
+    position: relative;
+    width: 100%;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+/* 悬停效果 */
+.zibll-ad-unit.is-empty:hover .auto-list-null {
+    opacity: 1;
+}
+
+/* 链接容器样式 */
+.auto-list-null .auto-url-list {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: var(--zibll-ad-radius, 8px);
+    background: transparent;
+    transition: background-color 0.3s ease;
+}
+
+/* 悬停背景效果 */
+.zibll-ad-unit.is-empty:hover .auto-url-list {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* 图标样式 */
+.auto-list-null .iconfont {
+    font-size: 18px;
+    line-height: 1;
+}
+
+/* 空文字容器（占位） */
+.auto-list-null .auto-ad-name {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 重写空位单元的基础样式（移除旧样式冲突） */
+.zibll-ad-unit.is-empty.is-available {
+    border: none;
+    background: transparent;
+    min-height: auto;
+    padding: 0;
+    display: block;
+}
+
+/* 移除旧的悬停效果 */
+.zibll-ad-unit.is-empty.is-available:hover {
+    box-shadow: none;
+    transform: none;
+    border-color: transparent;
+}
+
+/* 移除空位按钮层（使用新样式） */
+.zibll-ad-unit.is-empty.is-available .ad-empty-overlay {
+    display: none;
+}
+
+/* 确保主题utility classes兼容（备用定义） */
+/* 如果主题未提供这些类，这里提供降级方案 */
+.d-flex {
+    display: flex !important;
+}
+
+.align-items-center {
+    align-items: center !important;
+}
+
+.px-2 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+}
+
+.py-1 {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+}
+
+.ml-2 {
+    margin-left: 0.5rem !important;
+}
+
+.text-muted {
+    color: var(--zibll-ad-text-muted, #909399) !important;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .auto-list-null .auto-url-list {
+        padding: 0.4rem 0.8rem;
+    }
+
+    .auto-list-null .iconfont {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .auto-list-null .auto-url-list {
+        padding: 0.3rem 0.6rem;
+    }
+
+    .auto-list-null .iconfont {
+        font-size: 15px;
+    }
+}
+
+/* ========================================
+   新模板样式 - Card 风格文字广告位
+   直接应用到 .theme-box / .zib-widget 容器内
+   ======================================== */
+
+/* 卡片头部 */
+.theme-box .card-head,
+.zib-widget .card-head {
+    display: flex;
+    align-items: center;
+    padding-bottom: 0.75rem;
+}
+
+/* 小号文字 */
+.theme-box .text-sm,
+.zib-widget .text-sm {
+    font-size: 1.25rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* 图标字体 */
+.theme-box .card-head .iconfont,
+.zib-widget .card-head .iconfont {
+    font-style: normal;
+    margin-right: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+/* 热门图标 - SVG */
+.theme-box .icon-hot,
+.zib-widget .icon-hot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.5rem;
+}
+
+.theme-box .icon-hot svg,
+.zib-widget .icon-hot svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+    display: block;
+}
+
+/* 广告图标 - SVG */
+.theme-box .icon-ad-copy,
+.zib-widget .icon-ad-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.35rem;
+}
+
+.theme-box .icon-ad-copy svg,
+.zib-widget .icon-ad-copy svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+    display: block;
+}
+
+/* 按钮基础样式 */
+.theme-box .btn,
+.zib-widget .btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.85rem;
+    font-size: 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    border: 1px solid;
+    background-color: transparent;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+/* 黄色轮廓按钮 */
+.theme-box .btn-outline,
+.zib-widget .btn-outline {
+    border-color: var(--yellow, #ffc107);
+    color: var(--yellow, #ffc107);
+}
+
+.theme-box .btn-outline:hover,
+.zib-widget .btn-outline:hover {
+    background-color: var(--yellow, #ffc107);
+    color: #fff;
+}
+
+/* 黄色主题变量 */
+.theme-box .vc-yellow,
+.zib-widget .vc-yellow {
+    --btn-color: var(--yellow, #ffc107);
+}
+
+/* 自动右对齐 */
+.theme-box .ml-auto,
+.zib-widget .ml-auto {
+    margin-left: auto;
+}
+
+/* 卡片主体 */
+.theme-box .card-body,
+.zib-widget .card-body {
+    padding-top: 0.5rem;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* 网格布局 - 自适应列数 */
+.theme-box .posts-row,
+.zib-widget .posts-row {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: repeat(var(--per-row, 2), 1fr);
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* 防止长文本挤压网格：允许网格子项在轨道内收缩 */
+.theme-box .posts-row > .auto-list,
+.zib-widget .posts-row > .auto-list,
+.theme-box .posts-row > .auto-list-null,
+.zib-widget .posts-row > .auto-list-null {
+    min-width: 0; /* 关键：避免内容定义最小宽导致撑开网格 */
+}
+
+/* PC端布局 - 已使用CSS变量 --per-row，无需额外设置 */
+
+/* 已售广告和空位的通用链接样式 */
+.theme-box .auto-list a,
+.theme-box .auto-list-null > div,
+.zib-widget .auto-list a,
+.zib-widget .auto-list-null > div {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    text-decoration: none;
+    border-radius: var(--theme-border-radius-lg, 4px);
+    transition: all 0.3s;
+    min-width: 0; /* 关键：容器可在网格单元内收缩 */
+}
+
+/* 悬停效果 */
+.theme-box .auto-list a:hover,
+.theme-box .auto-list-null > div:hover,
+.zib-widget .auto-list a:hover,
+.zib-widget .auto-list-null > div:hover {
+    transform: translateY(-2px);
+}
+
+/* 广告图标容器 */
+.theme-box .auto-ad-img,
+.zib-widget .auto-ad-img {
+    width: 21px;
+    height: 21px;
+    flex-shrink: 0;
+}
+
+/* 已售广告的图标容器 - 圆形 */
+.theme-box .auto-list .auto-ad-img,
+.zib-widget .auto-list .auto-ad-img {
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+/* 广告图标内的图片 */
+.theme-box .auto-ad-img img,
+.zib-widget .auto-ad-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 广告名称文字 */
+.theme-box .auto-ad-name,
+.zib-widget .auto-ad-name {
+    margin-left: 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 auto;  /* 关键：占据剩余空间 */
+    min-width: 0;    /* 关键：允许内容收缩，从而触发省略号 */
+    max-width: 100%; /* 防止超出单元格 */
+}
+
+/* PC端广告名称左边距调整 */
+@media (min-width: 768px) {
+    .theme-box .auto-ad-name,
+    .zib-widget .auto-ad-name {
+        margin-left: 0.75rem;
+    }
+}
+
+/* 空位容器样式 */
+.theme-box .auto-list-null,
+.zib-widget .auto-list-null {
+    opacity: 0.6;
+}
+
+/* 空位内部容器 */
+.theme-box .auto-list-null > div,
+.zib-widget .auto-list-null > div {
+    cursor: pointer;
+}
+
+/* 空位图标样式 */
+.theme-box .auto-list-null .auto-ad-img,
+.zib-widget .auto-list-null .auto-ad-img {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+    color: var(--muted-color, #93959a);
+    font-weight: 600;
+}
+
+/* 空位图标SVG样式 */
+.theme-box .auto-list-null .auto-ad-img svg,
+.zib-widget .auto-list-null .auto-ad-img svg {
+    width: 14px;
+    height: 14px;
+    fill: var(--muted-color, #93959a);
+}
+
+/* 空位名称占位条 */
+.theme-box .auto-list-null .auto-ad-name,
+.zib-widget .auto-list-null .auto-ad-name {
+    height: 1rem;
+    background-color: var(--muted-bg-color, #e6e8ea);
+    border-radius: 4px;
+    flex: 1;
+    max-width: 80px;
+}
+
+/* 灰色文字 */
+.theme-box .text-muted,
+.zib-widget .text-muted {
+    color: var(--muted-color, #93959a);
+}
+
+/* 响应式调整 - 平板 */
+@media (max-width: 768px) {
+    .theme-box .card-head,
+    .zib-widget .card-head {
+        padding-bottom: 0.6rem;
+    }
+
+    .theme-box .card-body,
+    .zib-widget .card-body {
+        padding-top: 0.4rem;
+    }
+
+    .theme-box .posts-row,
+    .zib-widget .posts-row {
+        gap: 0.4rem;
+    }
+
+    .theme-box .auto-list a,
+    .theme-box .auto-list-null > div,
+    .zib-widget .auto-list a,
+    .zib-widget .auto-list-null > div {
+        padding: 0.2rem 0.4rem;
+    }
+
+    .theme-box .auto-ad-img,
+    .zib-widget .auto-ad-img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .theme-box .auto-ad-name,
+    .zib-widget .auto-ad-name {
+        margin-left: 0.4rem;
+        /* iPad/平板端放大广告名称 */
+        font-size: 1.125rem;
+    }
+
+    .theme-box .text-sm,
+    .zib-widget .text-sm {
+        font-size: 1.125rem;
+    }
+
+    .theme-box .btn,
+    .zib-widget .btn {
+        padding: 0.2rem 0.7rem;
+        font-size: 0.9375rem;
+    }
+
+    .theme-box .icon-hot,
+    .zib-widget .icon-hot {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+
+    .theme-box .icon-ad-copy,
+    .zib-widget .icon-ad-copy {
+        width: 0.9rem;
+        height: 0.9rem;
+    }
+}
+
+/* 响应式调整 - 手机 */
+@media (max-width: 480px) {
+    .theme-box .card-head,
+    .zib-widget .card-head {
+        padding-bottom: 0.5rem;
+    }
+
+    .theme-box .card-body,
+    .zib-widget .card-body {
+        padding-top: 0.35rem;
+    }
+
+    .theme-box .posts-row,
+    .zib-widget .posts-row {
+        gap: 0.3rem;
+        /* 手机端使用CSS变量动态设置列数（支持任意列数） */
+        grid-template-columns: repeat(var(--mobile-per-row, 2), 1fr) !important;
+    }
+
+    .theme-box .auto-list a,
+    .theme-box .auto-list-null > div,
+    .zib-widget .auto-list a,
+    .zib-widget .auto-list-null > div {
+        padding: 0.45rem 0.3rem;
+    }
+
+    .theme-box .auto-ad-img,
+    .zib-widget .auto-ad-img {
+        width: 16px;
+        height: 16px;
+    }
+
+    .theme-box .auto-ad-name,
+    .zib-widget .auto-ad-name {
+        margin-left: 0.3rem;
+        /* 仅放大广告名称，避免影响图标文字 */
+        font-size: 1.25rem;
+    }
+
+    /* 明确限制图标容器内文字大小，防止随父级继承变大 */
+    .theme-box .auto-ad-img,
+    .zib-widget .auto-ad-img {
+        font-size: 12px;
+    }
+
+    .theme-box .text-sm,
+    .zib-widget .text-sm {
+        font-size: 1.0625rem;
+    }
+
+    .theme-box .btn,
+    .zib-widget .btn {
+        padding: 0.18rem 0.6rem;
+        font-size: 0.875rem;
+    }
+
+    .theme-box .icon-hot,
+    .zib-widget .icon-hot {
+        width: 1rem;
+        height: 1rem;
+        margin-right: 0.35rem;
+    }
+
+    .theme-box .icon-ad-copy,
+    .zib-widget .icon-ad-copy {
+        width: 0.85rem;
+        height: 0.85rem;
+        margin-right: 0.25rem;
+    }
+
+    .theme-box .auto-list-null .auto-ad-img svg,
+    .zib-widget .auto-list-null .auto-ad-img svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+/* 深色模式适配（子比主题深色模式） - 必须先定义 */
+body.dark-theme .theme-box .auto-list-null,
+body.dark-theme .zib-widget .auto-list-null {
+    background-color: transparent;
+}
+
+body.dark-theme .theme-box .auto-list a,
+body.dark-theme .theme-box .auto-list-null > div,
+body.dark-theme .zib-widget .auto-list a,
+body.dark-theme .zib-widget .auto-list-null > div {
+    color: #e0e0e0;
+    border: 1px solid #3a3a3a;
+    background-color: #4c4d4f;
+}
+
+body.dark-theme .theme-box .auto-list a:hover,
+body.dark-theme .theme-box .auto-list-null > div:hover,
+body.dark-theme .zib-widget .auto-list a:hover,
+body.dark-theme .zib-widget .auto-list-null > div:hover {
+    background-color: #555;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-theme .theme-box .auto-list-null .auto-ad-img,
+body.dark-theme .zib-widget .auto-list-null .auto-ad-img {
+    color: #909399;
+}
+
+body.dark-theme .theme-box .auto-list-null .auto-ad-img svg,
+body.dark-theme .zib-widget .auto-list-null .auto-ad-img svg {
+    fill: #909399;
+}
+
+body.dark-theme .theme-box .auto-list-null .auto-ad-name,
+body.dark-theme .zib-widget .auto-list-null .auto-ad-name {
+    background-color: #5a5d61;
+}
+
+/* 浅色模式适配（子比主题浅色模式） - 后定义，优先级更高 */
+body:not(.dark-theme) .theme-box .auto-list-null,
+body:not(.dark-theme) .zib-widget .auto-list-null {
+    background-color: transparent;
+}
+
+body:not(.dark-theme) .theme-box .auto-list a,
+body:not(.dark-theme) .theme-box .auto-list-null > div,
+body:not(.dark-theme) .zib-widget .auto-list a,
+body:not(.dark-theme) .zib-widget .auto-list-null > div {
+    color: var(--main-color, #484b4f);
+    border: 1px solid var(--muted-bg-color, #e6e8ea);
+    background-color: #ffffff;
+}
+
+body:not(.dark-theme) .theme-box .auto-list a:hover,
+body:not(.dark-theme) .theme-box .auto-list-null > div:hover,
+body:not(.dark-theme) .zib-widget .auto-list a:hover,
+body:not(.dark-theme) .zib-widget .auto-list-null > div:hover {
+    background-color: var(--light, #f8f9fa);
+    box-shadow: 0 4px 8px var(--main-shadow, rgba(0,0,0,0.1));
+}
+
+body:not(.dark-theme) .theme-box .auto-list-null .auto-ad-img,
+body:not(.dark-theme) .zib-widget .auto-list-null .auto-ad-img {
+    color: var(--muted-color, #93959a);
+}
+
+body:not(.dark-theme) .theme-box .auto-list-null .auto-ad-img svg,
+body:not(.dark-theme) .zib-widget .auto-list-null .auto-ad-img svg {
+    fill: var(--muted-color, #93959a);
+}
+
+body:not(.dark-theme) .theme-box .auto-list-null .auto-ad-name,
+body:not(.dark-theme) .zib-widget .auto-list-null .auto-ad-name {
+    background-color: var(--muted-bg-color, #e6e8ea);
+}
+
+body:not(.dark-theme) .theme-box .text-sm,
+body:not(.dark-theme) .zib-widget .text-sm {
+    color: var(--main-color, #484b4f);
+}
+
+body:not(.dark-theme) .theme-box .icon-hot svg,
+body:not(.dark-theme) .zib-widget .icon-hot svg {
+    fill: var(--theme-color, #f1404b);
+}
+
+
+/* 无障碍支持 - 键盘焦点 */
+.theme-box .btn:focus-visible,
+.theme-box .auto-list a:focus-visible,
+.theme-box .auto-list-null > div:focus-visible,
+.zib-widget .btn:focus-visible,
+.zib-widget .auto-list a:focus-visible,
+.zib-widget .auto-list-null > div:focus-visible {
+    outline: 2px solid var(--theme-color, #f1404b);
+    outline-offset: 2px;
+}
+
+/* 减少动画模式 */
+@media (prefers-reduced-motion: reduce) {
+    .theme-box .btn,
+    .theme-box .auto-list a,
+    .theme-box .auto-list-null > div,
+    .zib-widget .btn,
+    .zib-widget .auto-list a,
+    .zib-widget .auto-list-null > div {
+        transition: none;
+        transform: none !important;
+    }
+}
+
+/* 打印样式 */
+@media print {
+    .theme-box .card-head,
+    .zib-widget .card-head {
+        display: none;
+    }
+
+    .theme-box .auto-list-null,
+    .zib-widget .auto-list-null {
+        display: none;
+    }
+}
+
+/* ========================================
+   购买模态框 - 样式优化
+   需求：移除 el-dialog__body 上边距，仅作用于本插件弹窗
+   ======================================== */
+.zibll-ad-purchase-dialog .el-dialog__body {
+    margin-top: 0 !important;
+}
+
+/* ========================================
+   Element Plus Message 居中修复
+   解决不同环境下居中偏移问题，使用 transform 实现稳定居中
+   ======================================== */
+.el-message.is-center {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+
+/* 自定义月数数字输入框 - 响应式宽度 */
+.custom-months-input {
+    width: 100%;
+}
+
+/* 电脑端：固定合适宽度 */
+@media (min-width: 768px) {
+    .custom-months-input {
+        width: 200px;
+    }
+}
+
+/* ========================================
+   购买广告位模态框 - 深色模式适配（子比主题）
+   适配子比主题的深色模式，通过 body.dark-theme 类来识别
+   ======================================== */
+
+/* 深色模式：对话框背景层（遮罩） */
+body.dark-theme .el-overlay {
+    background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* 深色模式：对话框包装器（移除任何白色边框/背景） */
+body.dark-theme .el-dialog__wrapper {
+    background-color: transparent !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+body.dark-theme .el-overlay-dialog {
+    background-color: transparent !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* 深色模式：对话框容器（注意：此元素同时具有 .el-dialog 与 .zibll-ad-purchase-dialog） */
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog,
+body.dark-theme .el-dialog.zibll-ad-purchase-dialog {
+    --el-dialog-bg-color: #1e1e1e !important;
+    --el-text-color-primary: #e0e0e0 !important;
+    --el-text-color-regular: #b0b0b0 !important;
+    --el-border-color: #3a3a3a !important;
+    --el-fill-color-light: #2a2a2a !important;
+    background: #1e1e1e !important;
+    border: 1px solid #3a3a3a !important;
+    /* 深色清晰描边 + 深阴影，避免任何白色溢出像素 */
+    box-shadow: 0 20px 48px 8px rgba(0, 0, 0, 0.6), 0 12px 28px rgba(0, 0, 0, 0.86) !important;
+    background-clip: padding-box !important;
+    position: relative;
+    color-scheme: dark !important;
+}
+
+/* 深色模式：对话框根元素（移除白色边框） */
+body.dark-theme .el-dialog__wrapper .el-dialog {
+    border: none !important;
+    outline: none !important;
+}
+
+/* 最终兜底：将任何可能的白色外圈用伪元素遮掉 */
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog::before,
+body.dark-theme .el-dialog.zibll-ad-purchase-dialog::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: 0 0 0 1px #3a3a3a inset !important;
+}
+
+/* 深色模式：对话框头部 */
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog__header {
+    background-color: #1e1e1e !important;
+    border-bottom: 1px solid #3a3a3a !important;
+    background-clip: padding-box !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog__title {
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog__close {
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog__close:hover {
+    color: #e0e0e0 !important;
+}
+
+/* 深色模式：对话框内容区 */
+body.dark-theme .zibll-ad-purchase-dialog .el-dialog__body {
+    background-color: #1e1e1e !important;
+    color: #b0b0b0 !important;
+    background-clip: padding-box !important;
+}
+
+/* 深色模式：表单 */
+body.dark-theme .zibll-ad-purchase-dialog .el-form {
+    --el-text-color-primary: #e0e0e0 !important;
+    --el-text-color-regular: #b0b0b0 !important;
+}
+
+/* 深色模式：表单项标签 */
+body.dark-theme .zibll-ad-purchase-dialog .el-form-item__label {
+    color: #b0b0b0 !important;
+}
+
+/* 深色模式：输入框 */
+body.dark-theme .zibll-ad-purchase-dialog .el-input__wrapper {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    box-shadow: 0 0 0 1px transparent inset !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__wrapper:hover {
+    border-color: #4a4a4a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__wrapper.is-focus {
+    border-color: #409eff !important;
+    box-shadow: 0 0 0 1px #409eff inset !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__inner {
+    color: #e0e0e0 !important;
+    background-color: transparent !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__inner::placeholder {
+    color: #606266 !important;
+}
+
+/* 深色模式：文本域 */
+body.dark-theme .zibll-ad-purchase-dialog .el-textarea__inner {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-textarea__inner::placeholder {
+    color: #606266 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-textarea__inner:hover {
+    border-color: #4a4a4a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-textarea__inner:focus {
+    border-color: #409eff !important;
+}
+
+/* 深色模式：数字输入框 */
+body.dark-theme .zibll-ad-purchase-dialog .el-input-number {
+    background-color: transparent !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input-number .el-input__wrapper {
+    background-color: #2a2a2a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input-number__decrease,
+body.dark-theme .zibll-ad-purchase-dialog .el-input-number__increase {
+    background-color: #2a2a2a !important;
+    border-left: 1px solid #3a3a3a !important;
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input-number__decrease:hover,
+body.dark-theme .zibll-ad-purchase-dialog .el-input-number__increase:hover {
+    color: #409eff !important;
+    background-color: #333333 !important;
+}
+
+/* 深色模式：下拉选择框 */
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input__wrapper {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+}
+
+/* 修复：Element Plus 在关闭态/聚焦态/悬停态下强制为深色背景 */
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input__wrapper:hover,
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input__wrapper.is-focus,
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input.is-focus .el-input__wrapper,
+body.dark-theme .zibll-ad-purchase-dialog .el-select:not(.is-disabled) .el-input__wrapper {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    box-shadow: 0 0 0 1px transparent inset !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input__inner {
+    color: #e0e0e0 !important;
+    background-color: transparent !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input__suffix {
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select .el-input__suffix .el-icon {
+    color: #909399 !important;
+}
+
+/* 深色模式：下拉选项面板（需要全局样式，因为下拉面板是 teleport 到 body 的） */
+body.dark-theme .el-select-dropdown {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-theme .el-select-dropdown__item {
+    color: #b0b0b0 !important;
+    background-color: transparent !important;
+}
+
+body.dark-theme .el-select-dropdown__item:hover {
+    background-color: #333333 !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .el-select-dropdown__item.selected {
+    color: #409eff !important;
+    background-color: rgba(64, 158, 255, 0.1) !important;
+}
+
+body.dark-theme .el-select-dropdown__item.hover {
+    background-color: #333333 !important;
+}
+
+/* ==============================
+   深色模式：Element Plus 新版 Select（.el-select__wrapper 结构）闭合态
+   说明：新版不再使用 .el-input__wrapper，而是 .el-select__wrapper + .el-select__selection
+   ============================== */
+body.dark-theme .zibll-ad-purchase-dialog .el-select__wrapper {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    color: #e0e0e0 !important;
+    box-shadow: none !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select__wrapper.is-focused,
+body.dark-theme .zibll-ad-purchase-dialog .el-select__wrapper.is-hovering,
+body.dark-theme .zibll-ad-purchase-dialog .el-select.is-focus .el-select__wrapper {
+    background-color: #2a2a2a !important;
+    border-color: #409eff !important;
+    box-shadow: 0 0 0 1px #409eff inset !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select__selection,
+body.dark-theme .zibll-ad-purchase-dialog .el-select__selected-item {
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select__placeholder,
+body.dark-theme .zibll-ad-purchase-dialog .el-select__placeholder span {
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select__icon {
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-select__input {
+    color: #e0e0e0 !important;
+    background-color: transparent !important;
+}
+
+/* 深色模式：单选按钮 */
+body.dark-theme .zibll-ad-purchase-dialog .el-radio {
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio__input {
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio__inner {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio__input:hover .el-radio__inner {
+    border-color: #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio__input.is-checked .el-radio__inner {
+    background-color: #409eff !important;
+    border-color: #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio__label {
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio__input.is-checked + .el-radio__label {
+    color: #409eff !important;
+}
+
+/* 深色模式：单选按钮组（按钮样式） */
+body.dark-theme .zibll-ad-purchase-dialog .el-radio-button__inner {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    color: #b0b0b0 !important;
+    box-shadow: none !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio-button__inner:hover {
+    color: #409eff !important;
+    border-color: #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio-button__original-radio:checked + .el-radio-button__inner {
+    background-color: #409eff !important;
+    border-color: #409eff !important;
+    color: #ffffff !important;
+    box-shadow: -1px 0 0 0 #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-radio-button:first-child .el-radio-button__inner {
+    border-left: 1px solid #3a3a3a !important;
+}
+
+/* 深色模式：提示框（Alert） */
+body.dark-theme .zibll-ad-purchase-dialog .el-alert {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--info {
+    background-color: rgba(64, 158, 255, 0.1) !important;
+    border-color: rgba(64, 158, 255, 0.3) !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--info .el-alert__title,
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--info .el-alert__description {
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--warning {
+    background-color: rgba(230, 162, 60, 0.1) !important;
+    border-color: rgba(230, 162, 60, 0.3) !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--warning .el-alert__title,
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--warning .el-alert__description {
+    color: #e6a23c !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--error {
+    background-color: rgba(245, 108, 108, 0.1) !important;
+    border-color: rgba(245, 108, 108, 0.3) !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--error .el-alert__title,
+body.dark-theme .zibll-ad-purchase-dialog .el-alert.el-alert--error .el-alert__description {
+    color: #f56c6c !important;
+}
+
+/* 深色模式：分隔线 */
+body.dark-theme .zibll-ad-purchase-dialog .el-divider {
+    border-color: #3a3a3a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-divider__text {
+    background-color: #1e1e1e !important;
+    color: #b0b0b0 !important;
+}
+
+/* 深色模式：按钮 */
+body.dark-theme .zibll-ad-purchase-dialog .el-button {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-button:hover {
+    background-color: #333333 !important;
+    border-color: #4a4a4a !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-button--primary {
+    background-color: #409eff !important;
+    border-color: #409eff !important;
+    color: #ffffff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-button--primary:hover {
+    background-color: #66b1ff !important;
+    border-color: #66b1ff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-button--danger {
+    background-color: #f56c6c !important;
+    border-color: #f56c6c !important;
+    color: #ffffff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-button--danger:hover {
+    background-color: #f78989 !important;
+    border-color: #f78989 !important;
+}
+
+/* 深色模式：上传组件 */
+body.dark-theme .zibll-ad-purchase-dialog .upload-placeholder {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .upload-placeholder:hover {
+    border-color: #409eff !important;
+    color: #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .preview-image {
+    border-color: #3a3a3a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .preview-image:hover {
+    border-color: #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .image-slot {
+    background-color: #2a2a2a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .ad-plus-icon {
+    color: #606266 !important;
+}
+
+/* 深色模式：图片上传提示文字 */
+body.dark-theme .zibll-ad-purchase-dialog .upload-placeholder > div {
+    color: #909399 !important;
+}
+
+/* 深色模式：加载动画 */
+body.dark-theme .zibll-ad-purchase-dialog .el-loading-mask {
+    background-color: rgba(30, 30, 30, 0.9) !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-loading-spinner .path {
+    stroke: #409eff !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-loading-spinner .el-loading-text {
+    color: #b0b0b0 !important;
+}
+
+/* 深色模式：表单验证错误提示 */
+body.dark-theme .zibll-ad-purchase-dialog .el-form-item__error {
+    color: #f56c6c !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-form-item.is-error .el-input__wrapper {
+    border-color: #f56c6c !important;
+    box-shadow: 0 0 0 1px #f56c6c inset !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-form-item.is-error .el-textarea__inner {
+    border-color: #f56c6c !important;
+}
+
+/* 深色模式：字数统计 */
+body.dark-theme .zibll-ad-purchase-dialog .el-input__count {
+    background-color: #2a2a2a !important;
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__count .el-input__count-inner {
+    background-color: transparent !important;
+    color: #909399 !important;
+}
+
+/* 深色模式：输入框计数器容器 */
+body.dark-theme .zibll-ad-purchase-dialog .el-input .el-input__count {
+    background: #2a2a2a !important;
+    color: #909399 !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__wrapper .el-input__count {
+    background: #2a2a2a !important;
+    color: #909399 !important;
+}
+
+/* 深色模式：字数限制（强制覆盖） */
+body.dark-theme .zibll-ad-purchase-dialog .el-input__suffix-inner .el-input__count,
+body.dark-theme .zibll-ad-purchase-dialog .el-input--suffix .el-input__count {
+    background-color: #2a2a2a !important;
+    color: #909399 !important;
+}
+
+/* 深色模式：输入框后缀区域（确保字数统计背景正确） */
+body.dark-theme .zibll-ad-purchase-dialog .el-input__suffix {
+    background-color: #2a2a2a !important;
+}
+
+body.dark-theme .zibll-ad-purchase-dialog .el-input__suffix-inner {
+    background-color: transparent !important;
+}
+
+/* 深色模式：强制所有字数统计显示为深色 */
+body.dark-theme .zibll-ad-purchase-dialog .el-input__count,
+body.dark-theme .zibll-ad-purchase-dialog .el-input__count-inner,
+body.dark-theme .zibll-ad-purchase-dialog span.el-input__count {
+    background: #2a2a2a !important;
+    color: #909399 !important;
+}
+
+/* 深色模式：自定义提示文字 */
+body.dark-theme .zibll-ad-purchase-dialog div[style*="color:#909399"] {
+    color: #909399 !important;
+}
+
+/* 深色模式：支付方式容器（主题生成的HTML） */
+body.dark-theme #zibll-ad-payment-container {
+    background-color: transparent !important;
+}
+
+/* 深色模式：依赖盒子（主题通用容器） */
+body.dark-theme #zibll-ad-payment-container .dependency-box {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+}
+
+/* 深色模式：支付方式选择器（hollow-radio） */
+body.dark-theme #zibll-ad-payment-container .hollow-radio {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme #zibll-ad-payment-container .hollow-radio:hover {
+    border-color: #409eff !important;
+    background-color: rgba(64, 158, 255, 0.05) !important;
+}
+
+body.dark-theme #zibll-ad-payment-container .hollow-radio.active {
+    border-color: #409eff !important;
+    background-color: rgba(64, 158, 255, 0.1) !important;
+    color: #409eff !important;
+}
+
+/* 深色模式：支付方式单选框（payment-method-radio） */
+body.dark-theme #zibll-ad-payment-container .payment-method-radio {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme #zibll-ad-payment-container .payment-method-radio:hover {
+    border-color: #409eff !important;
+}
+
+body.dark-theme #zibll-ad-payment-container .payment-method-radio.active {
+    border-color: #409eff !important;
+    background-color: rgba(64, 158, 255, 0.1) !important;
+}
+
+/* 深色模式：支付方式选项 */
+body.dark-theme #zibll-ad-payment-container .payment-method-item {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme #zibll-ad-payment-container input[type="radio"] + label {
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme #zibll-ad-payment-container .payment-method-label {
+    color: #b0b0b0 !important;
+}
+
+/* 深色模式：价格显示 */
+body.dark-theme #zibll-ad-payment-container .price,
+body.dark-theme #zibll-ad-payment-container .total-price {
+    color: #e0e0e0 !important;
+}
+
+/* 深色模式：主题通用文字颜色 */
+body.dark-theme #zibll-ad-payment-container,
+body.dark-theme #zibll-ad-payment-container * {
+    color: inherit;
+}
+
+body.dark-theme #zibll-ad-payment-container {
+    color: #b0b0b0 !important;
+}
+
+/* 深色模式：支付按钮 */
+body.dark-theme #zibll-ad-payment-container .but,
+body.dark-theme #zibll-ad-payment-container button,
+body.dark-theme #zibll-ad-payment-container .btn {
+    background-color: #409eff !important;
+    border-color: #409eff !important;
+    color: #ffffff !important;
+}
+
+body.dark-theme #zibll-ad-payment-container .but:hover,
+body.dark-theme #zibll-ad-payment-container button:hover,
+body.dark-theme #zibll-ad-payment-container .btn:hover {
+    background-color: #66b1ff !important;
+    border-color: #66b1ff !important;
+}
+
+/* 深色模式：Element Plus Message 消息提示（全局，因为它是 teleport 到 body 的） */
+body.dark-theme .el-message {
+    background-color: #2a2a2a !important;
+    border-color: #3a3a3a !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-theme .el-message__content {
+    color: #e0e0e0 !important;
+}
+
+body.dark-theme .el-message.el-message--info {
+    background-color: rgba(64, 158, 255, 0.15) !important;
+    border-color: rgba(64, 158, 255, 0.3) !important;
+}
+
+body.dark-theme .el-message.el-message--success {
+    background-color: rgba(103, 194, 58, 0.15) !important;
+    border-color: rgba(103, 194, 58, 0.3) !important;
+}
+
+body.dark-theme .el-message.el-message--warning {
+    background-color: rgba(230, 162, 60, 0.15) !important;
+    border-color: rgba(230, 162, 60, 0.3) !important;
+}
+
+body.dark-theme .el-message.el-message--error {
+    background-color: rgba(245, 108, 108, 0.15) !important;
+    border-color: rgba(245, 108, 108, 0.3) !important;
+}
+
+/* 深色模式：Popper 弹出框（全局，用于下拉框等） */
+body.dark-theme .el-popper {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    color: #b0b0b0 !important;
+}
+
+body.dark-theme .el-popper.is-dark {
+    background-color: #1e1e1e !important;
+    border-color: #1e1e1e !important;
+}
+
+body.dark-theme .el-popper__arrow::before {
+    background-color: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+}
